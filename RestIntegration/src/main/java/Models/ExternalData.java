@@ -7,9 +7,9 @@ public class ExternalData {
     private String approvedDate;
     private String name;
     private String doctype;
-    private int majorNumber;
-    private int minorNumber;
-    private Boolean trainingImpact;
+    private String majorNumber;
+    private String minorNumber;
+    private String trainingImpact;
 
     public String getFilename() {
         return filename;
@@ -51,27 +51,27 @@ public class ExternalData {
         this.doctype = doctype;
     }
 
-    public int getMajorNumber() {
+    public String getMajorNumber() {
         return majorNumber;
     }
 
-    public void setMajorNumber(int majorNumber) {
+    public void setMajorNumber(String majorNumber) {
         this.majorNumber = majorNumber;
     }
 
-    public int getMinorNumber() {
+    public String getMinorNumber() {
         return minorNumber;
     }
 
-    public void setMinorNumber(int minorNumber) {
+    public void setMinorNumber(String minorNumber) {
         this.minorNumber = minorNumber;
     }
 
-    public Boolean getTrainingImpact() {
+    public String getTrainingImpact() {
         return trainingImpact;
     }
 
-    public void setTrainingImpact(Boolean trainingImpact) {
+    public void setTrainingImpact(String trainingImpact) {
         this.trainingImpact = trainingImpact;
     }
 }
