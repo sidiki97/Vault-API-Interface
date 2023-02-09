@@ -9,7 +9,10 @@ public class ExternalData {
     private String doctype;
     private String majorNumber;
     private String minorNumber;
-    private String trainingImpact;
+    private Boolean trainingImpact;
+    private String country;
+    private String department;
+    private String facility;
 
     public String getFilename() {
         return filename;
@@ -67,11 +70,35 @@ public class ExternalData {
         this.minorNumber = minorNumber;
     }
 
-    public String getTrainingImpact() {
+    public Boolean getTrainingImpact() {
         return trainingImpact;
     }
 
-    public void setTrainingImpact(String trainingImpact) {
+    public void setTrainingImpact(Boolean trainingImpact) {
         this.trainingImpact = trainingImpact;
+    }
+
+    public String getCountry() {
+        return country;
+    }
+
+    public void setCountry(String country) {
+        this.country = country;
+    }
+
+    public String getDepartment() {
+        return department;
+    }
+
+    public void setDepartment(String department) {
+        this.department = department;
+    }
+
+    public String getFacility() {
+        return facility;
+    }
+
+    public void setFacility(String facility) {
+        this.facility = facility;
     }
 }
