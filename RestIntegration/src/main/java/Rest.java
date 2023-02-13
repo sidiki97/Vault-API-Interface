@@ -1,17 +1,16 @@
-import ExternalSystem.DataRecords;
+
 import Models.*;
 import com.google.gson.*;
-import com.opencsv.CSVReader;
-import com.opencsv.CSVWriter;
-import kong.unirest.HttpResponse;
-import kong.unirest.JsonNode;
-import kong.unirest.Unirest;
 
-import java.awt.*;
+import kong.unirest.HttpResponse;
+import kong.unirest.Unirest;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
+
 import java.io.*;
-import java.lang.reflect.Array;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.List;
 
@@ -26,13 +25,16 @@ public class Rest {
         Unirest.config().defaultBaseUrl("https://vv-consulting-candidate-rd-exercise28.veevavault.com/api/v22.3");
 
         System.out.print("Authentication: ");
+        UserInfo userInfo = new UserInfo();
         // Authentication
         HttpResponse<String> response = Unirest.post("/auth")
                 .header("Content-type", "application/x-www-form-urlencoded")
                 .header("Accept", "application/json")
-                .field("username", "rd_candidate28@vv-consulting.com")
-                .field("password", "V@ultGrind23")
+                .header("X-VaultAPI-ClientID", "veeva-vault-create-docs-interface")
+                .field("username", userInfo.getUSERNAME())
+                .field("password", userInfo.getPASSWORD())
                 .asString();
+
 
         System.out.println("Successful");
 
@@ -46,41 +48,104 @@ public class Rest {
         System.out.println("Extract External Data");
 
         // Extract External Data from csv
-        BufferedReader reader = new BufferedReader(new FileReader(dirFilePath + "/ExternalData.csv", StandardCharsets.UTF_8));
+        BufferedReader reader = new BufferedReader(new FileReader(dirFilePath + "/ExternalData.csv"));
         ArrayList<ExternalData> externalData = new ArrayList<>();// read line by line
-        String record = null;
+        String record;
 
+        List<String> headers = new ArrayList<>();
+
+        int i = 0;
         while ((record = reader.readLine()) != null) {
             String[] recordSplit = record.split(",");
-            ExternalData data= new ExternalData();
-            data.setFilename(recordSplit[0]);
-            data.setExternalId(recordSplit[1]);
-            data.setApprovedDate(recordSplit[2]);
-            data.setName(recordSplit[3]);
-            data.setDoctype(recordSplit[4]);
-            data.setTrainingImpact(Boolean.valueOf(recordSplit[5]));
-            data.setCountry(recordSplit[6]);
-            data.setDepartment(recordSplit[7]);
-            data.setFacility(recordSplit[8]);
-            externalData.add(data);
+            if (i == 0){
+                for (String header: recordSplit){
+                    headers.add(header);
+                }
+                i++;
+            } else {
+
+                ExternalData data= new ExternalData();
+                data.setFilename(recordSplit[0]);
+                data.setName(recordSplit[1]);
+                data.setDoctype(recordSplit[2]);
+                data.setSubtype(recordSplit[3]);
+                data.setLifecycle(recordSplit[4]);
+                data.setExternalId(recordSplit[5]);
+                data.setApprovedDate(recordSplit[6]);
+                data.setTrainingImpact(Boolean.valueOf(recordSplit[7]));
+                data.setCountry(recordSplit[8]);
+                data.setDepartment(recordSplit[9]);
+                data.setFacility(recordSplit[10]);
+                externalData.add(data);
+            }
+
         }
 
         System.out.println("Extracted");
 
-        // Beginning of csv (removing character)
-        for (ExternalData data : externalData){
-
-            data.setFilename(data.getFilename().replace("\uFEFF", ""));
-
-        }
-
-
-        // External Data
-        //List<ExternalData> externalData = DataRecords.data();
 
         // Data Transformation
 
         System.out.println("Data Transformation");
+
+        // Retrieve Required doc fields
+        // Filter response for required fields from property field
+
+        Map<String, String> headerData = new HashMap<>();
+        String doctypeName = "";
+
+        HttpResponse<String> requireDoctype = Unirest.get("/metadata/objects/documents/types")
+                .header("Authorization", auth.getSessionId())
+                .header("Accept", "application/json")
+                .asString();
+
+
+        DocType docType = gson.fromJson(requireDoctype.getBody(), DocType.class);
+
+        for (Object object : docType.getTypes()) {
+
+            TypeData typeData = gson.fromJson(object.toString(), TypeData.class);
+            if (typeData.getLabel().equals("Governance and Procedure")) {
+                doctypeName = typeData.getValue().substring(typeData.getValue().lastIndexOf('/') + 1);
+            }
+
+        }
+
+
+        HttpResponse<String> requireDocFieldsresponse = Unirest.get("/metadata/objects/documents/types/{type}/")
+                .header("Authorization", auth.getSessionId())
+                .header("Accept", "application/json")
+                .routeParam("type", doctypeName)
+                .asString();
+
+
+        DocFields docFields = gson.fromJson(requireDocFieldsresponse.getBody(), DocFields.class);
+
+
+
+        Collection<String> vaultFields = new ArrayList<>();
+
+
+        for (Object object : docFields.getProperties()){
+            VaultField vaultField = gson.fromJson(object.toString(), VaultField.class);
+
+            if (vaultField.getRequired()){
+
+                vaultFields.add(vaultField.getName());
+                if (headers.indexOf(vaultField.getLabel()) != -1){
+                    headerData.put(vaultField.getLabel(), vaultField.getName());
+                }
+
+            } else{
+                if (headers.indexOf(vaultField.getLabel()) != -1) {
+                    headerData.put(vaultField.getLabel(), vaultField.getName());
+                }
+            }
+
+        }
+
+
+
 
         HttpResponse<String> queryDepartmentResponse = Unirest.post("/query")
                 .header("Authorization", auth.getSessionId())
@@ -94,7 +159,6 @@ public class Rest {
         QueryRecordData departmentData = gson.fromJson(queryDepartmentResponse.getBody(), QueryRecordData.class);
 
         Map<String, String> deptIds = new HashMap<>();
-        Map<String, String> facilityIds = new HashMap<>();
 
         for (Object object : departmentData.getData()){
             VaultObject deptId = gson.fromJson(object.toString(), VaultObject.class);
@@ -114,15 +178,14 @@ public class Rest {
 
         QueryRecordData facilityData = gson.fromJson(queryFacilityResponse.getBody(), QueryRecordData.class);
 
+        Map<String, String> facilityIds = new HashMap<>();
+
         for (Object object : facilityData.getData()){
             VaultObject facilityId = gson.fromJson(object.toString(), VaultObject.class);
 
             facilityIds.put(facilityId.getName__v(), facilityId.getId());
 
         }
-
-
-
 
 
 
@@ -136,7 +199,6 @@ public class Rest {
                 splits[0] = splits[0].toLowerCase();
                 data.setCountry(splits[0]);
             }
-//            data.setCountry(data.getCountry().toLowerCase().replaceAll("\\s", ""));
             data.setDepartment(deptIds.get(data.getDepartment()));
             data.setFacility(facilityIds.get(data.getFacility()));
 
@@ -166,81 +228,42 @@ public class Rest {
                     .field("kind", "file")
                     .field("path", file.getName())
                     .asString();
-
-
-//            FileStaging fileStaging = gson.fromJson(fileStagingResponse.getBody(), FileStaging.class);
-//
-//            Path path = gson.fromJson(fileStaging.getPath().toString(), Path.class);
-//
-//            System.out.println(path);
-
-
         }
-        // TODO: FIGURE out training_impact__c field
+        for (ExternalData data : externalData){
+            data.setFilename("u" + auth.getUserId() + "/" + data.getFilename());
+        }
 
 
-//        Map<String, String> fieldMap = new HashMap<>();
-//        fieldMap.put("externalID","external_id__v");
-//        fieldMap.put("approvedDate","approved_date__c");
-//        fieldMap.put("name","name__v");
-//        fieldMap.put("doctype","subtype__v");
-//        fieldMap.put("majorNumber", "major_version_number__v");
-//        fieldMap.put("minorNumber", "minor_version_number__v");
-//        fieldMap.put("trainingImpact", "training_impact__c");
 
         System.out.println("Write new data to CSV");
 
+
+
+
+
         // Format External Data into String Arrays assist with CSV Input
-        List<String[]> csvData = toStringArray(externalData);
+        List<String[]> csvData = toStringArray(externalData, headers, headerData);
 
         // Write data to CSV
         File file = new File(dirFilePath + "/data.csv");
+
         try {
-            // create FileWriter object with file as parameter
-            FileWriter outputfile = new FileWriter(file, StandardCharsets.UTF_8);
 
-            // create CSVWriter object filewriter object as parameter
-            CSVWriter writer = new CSVWriter(outputfile);
-            writer.writeAll(csvData);
+            BufferedWriter writer = Files.newBufferedWriter(Paths.get(dirFilePath + "/data.csv"), StandardCharsets.UTF_8);
 
+            CSVPrinter printer = new CSVPrinter(writer, CSVFormat.RFC4180);
+
+            for (String[] row: csvData){
+                printer.printRecord(row);
+            }
             writer.close();
+            printer.close();
+
+
 
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-
-
-        // Retrieve Required doc fields
-        // Filter response for required fields from property field
-
-//        HttpResponse<String> requireDocFieldsresponse = Unirest.get("/metadata/objects/documents/types/{type}")
-//                .header("Authorization", auth.getSessionId())
-//                .header("Accept", "application/json")
-//                .routeParam("type", "base_document__v")
-//                .asString();
-//
-//
-//        DocFields docFields = gson.fromJson(requireDocFieldsresponse.getBody(), DocFields.class);
-//
-//
-//
-//        Collection<String> vaultFields = new ArrayList<>();
-//
-//        for (Object object : docFields.getProperties()){
-//            VaultField vaultField = gson.fromJson(object.toString(), VaultField.class);
-//
-//            if (vaultField.getRequired()){
-//
-//                vaultFields.add(vaultField.getName());
-//            }
-//
-//        }
-//        System.out.println(vaultFields);
-
-
-
-
 
 
 
@@ -259,23 +282,57 @@ public class Rest {
         System.out.println(createMultiDocResponse.getBody());
 
 
+        // Initiate Doc Workflow
+
+        DocIds docIds = gson.fromJson(createMultiDocResponse.getBody() , DocIds.class);
+
+        List<String> ids = new ArrayList<>();
+
+        String document__sys = "";
+        for (Object id : docIds.getData()) {
+            Doc doc = gson.fromJson(id.toString(), Doc.class);
+
+            ids.add(Integer.toString(doc.getDocId()));
+            document__sys += doc.getDocId() + ",";
+        }
+
+        document__sys = document__sys.substring(0, document__sys.length() - 1);
+
+
+        HttpResponse<String> startWF = Unirest.post("/objects/documents/actions/Objectworkflow.external_approved_quality_check__c")
+                .header("Authorization", auth.getSessionId())
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .field("documents__sys", document__sys)
+                .field("description__sys", "Externally Approved Documents")
+                .asString();
+
+
 
     }
 
-    private static List<String[]> toStringArray(List<ExternalData> externalData) {
+    private static List<String[]> toStringArray(List<ExternalData> externalData, List<String> headers, Map<String, String> headerData) {
         List<String[]> records = new ArrayList<String[]>();
 
+        String[] top = new String[headers.size()];
+        for (int i = 0; i < headers.size(); i++) {
+            if (i == 0){
+                top[i] = "file";
+            } else {
+                top[i] = headerData.get(headers.get(i));
+            }
+
+        }
         // adding header record
-        records.add(new String[] { "name__v", "file", "type__v", "subtype__v", "lifecycle__v", "external_id__v", "approved_date__c", "training_impact__c", "country__v",
-                "owning_department__v", "owning_facility__v" });
+        records.add(top);
 
         Iterator<ExternalData> it = externalData.iterator();
         while (it.hasNext()) {
             ExternalData data = it.next();
 
-            records.add(new String[] { data.getName(), "u1129899/" + data.getFilename(), "Governance and Procedure",
-                    data.getDoctype(), "Draft to Effective Lifecycle", data.getExternalId(), data.getApprovedDate(),
-                    data.getTrainingImpact().toString(), data.getCountry(), data.getDepartment(), data.getFacility()});
+            records.add(new String[] { data.getFilename(), data.getName(), data.getDoctype(), data.getSubtype(), data.getLifecycle(),
+                    data.getExternalId(), data.getApprovedDate(), data.getTrainingImpact().toString(),
+                    data.getCountry(), data.getDepartment(), data.getFacility()});
         }
         return records;
     }

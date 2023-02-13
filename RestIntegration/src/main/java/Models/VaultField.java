@@ -3,6 +3,7 @@ package Models;
 public class VaultField {
     private String name;
     private Boolean required;
+    private String label;
 
 
     public String getName() {
@@ -20,4 +21,13 @@ public class VaultField {
     public void setRequired(Boolean required) {
         this.required = required;
     }
+
+    public String getLabel() {
+        return label;
+    }
+
+    public void setLabel(String label) {
+        this.label = label;
+    }
+
 }

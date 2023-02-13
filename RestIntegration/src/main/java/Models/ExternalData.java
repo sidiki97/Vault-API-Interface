@@ -7,8 +7,8 @@ public class ExternalData {
     private String approvedDate;
     private String name;
     private String doctype;
-    private String majorNumber;
-    private String minorNumber;
+    private String subtype;
+    private String lifecycle;
     private Boolean trainingImpact;
     private String country;
     private String department;
@@ -54,20 +54,20 @@ public class ExternalData {
         this.doctype = doctype;
     }
 
-    public String getMajorNumber() {
-        return majorNumber;
+    public String getSubtype() {
+        return subtype;
     }
 
-    public void setMajorNumber(String majorNumber) {
-        this.majorNumber = majorNumber;
+    public void setSubtype(String subtype) {
+        this.subtype = subtype;
     }
 
-    public String getMinorNumber() {
-        return minorNumber;
+    public String getLifecycle() {
+        return lifecycle;
     }
 
-    public void setMinorNumber(String minorNumber) {
-        this.minorNumber = minorNumber;
+    public void setLifecycle(String lifecycle) {
+        this.lifecycle = lifecycle;
     }
 
     public Boolean getTrainingImpact() {
