@@ -1,16 +1,19 @@
 package Models;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.google.gson.reflect.TypeToken;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
-public class DocFields {
+public class DocFields extends Error{
+    private String responseStatus;
     private JsonObject[] properties;
+//    private JsonObject[] errors;
 
+    public String getResponseStatus() {
+        return responseStatus;
+    }
+
+    public void setResponseStatus(String responseStatus) {
+        this.responseStatus = responseStatus;
+    }
 
     public Object[] getProperties() {
         return properties;
@@ -20,5 +23,11 @@ public class DocFields {
         this.properties = properties;
     }
 
-
+//    public JsonObject[] getErrors() {
+//        return errors;
+//    }
+//
+//    public void setErrors(JsonObject[] errors) {
+//        this.errors = errors;
+//    }
 }

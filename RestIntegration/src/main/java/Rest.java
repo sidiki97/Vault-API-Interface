@@ -1,5 +1,6 @@
 
 import Models.*;
+import Models.Error;
 import com.google.gson.*;
 
 import kong.unirest.HttpResponse;
@@ -13,19 +14,31 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.LogManager;
+import java.util.logging.Logger;
 
 
 public class Rest {
 
+//    static Logger logger = Logger.getLogger(Rest.class.getName());
 
     public static void main(String[] args) throws Exception {
 
 
+        LogManager lgmngr = LogManager.getLogManager();
+        Logger log = lgmngr.getLogger(Logger.GLOBAL_LOGGER_NAME);
+
         // Default base URL to be used for all requests that do not contain a full URL.
         Unirest.config().defaultBaseUrl("https://vv-consulting-candidate-rd-exercise28.veevavault.com/api/v22.3");
 
-        System.out.print("Authentication: ");
+
+
+        log.log(Level.INFO, "Authenticating to Vault ...");
+//        System.out.print("Authentication: ");
         UserInfo userInfo = new UserInfo();
+
+
         // Authentication
         HttpResponse<String> response = Unirest.post("/auth")
                 .header("Content-type", "application/x-www-form-urlencoded")
@@ -36,11 +49,18 @@ public class Rest {
                 .asString();
 
 
-        System.out.println("Successful");
+
 
         // Use Gson to serialize to JSON and deserialize from JSON
         Gson gson = new Gson();
         Auth auth = gson.fromJson(response.getBody(), Auth.class);
+
+        if (auth.getResponseStatus().equals("SUCCESS")){
+            log.log(Level.INFO, "AUTHENTICATION SUCCESSFUL");
+        }  else {
+            log.log(Level.INFO, auth.getResponseMessage());
+            System.exit(1);
+        }
 
         // Document Storage
         String dirFilePath = "/Users/abbassiddiqui-mbpr16/Documents/Interface";
@@ -99,8 +119,16 @@ public class Rest {
                 .header("Accept", "application/json")
                 .asString();
 
-
         DocType docType = gson.fromJson(requireDoctype.getBody(), DocType.class);
+
+        if (docType.getResponseStatus().equals("SUCCESS")){
+            log.log(Level.INFO, "DOCTYPE RETRIEVAL SUCCESSFUL");
+        }  else {
+            Errors e = gson.fromJson(docType.getErrors()[0].toString(), Errors.class);
+
+            log.log(Level.INFO, e.getType() + ": " + e.getMessage());
+            System.exit(1);
+        }
 
         for (Object object : docType.getTypes()) {
 
@@ -116,11 +144,23 @@ public class Rest {
                 .header("Authorization", auth.getSessionId())
                 .header("Accept", "application/json")
                 .routeParam("type", doctypeName)
-                .asString();
+                .asString()
+                .ifFailure(stringHttpResponse -> {
+                    log.log(Level.INFO, "ERROR IN GET REQUEST: " + stringHttpResponse.getStatusText());
+                });
 
 
         DocFields docFields = gson.fromJson(requireDocFieldsresponse.getBody(), DocFields.class);
 
+        if (docFields.getResponseStatus().equals("SUCCESS")){
+            log.log(Level.INFO, "DOCTYPE FIELDS RETRIEVAL SUCCESSFUL");
+        }  else {
+//            Errors e = gson.fromJson(docFields.getErrors()[0].toString(), Errors.class);
+//
+//            log.log(Level.INFO, e.getType() + ": " + e.getMessage());
+//            System.exit(1);
+            errorHandler(docFields, gson, log);
+        }
 
 
         Collection<String> vaultFields = new ArrayList<>();
@@ -217,6 +257,7 @@ public class Rest {
         // Create Files in File Staging Server
         // Have a list of File objects - run a while loop to create all files in File Staging Server
 
+        Map<String, String> fileStaged = new HashMap<>();
 
         System.out.println("Load docs into Staging Server");
         for (File file: files) {
@@ -228,9 +269,27 @@ public class Rest {
                     .field("kind", "file")
                     .field("path", file.getName())
                     .asString();
+
+            FileStaging fileStaging = gson.fromJson(fileStagingResponse.getBody(), FileStaging.class);
+
+            if (fileStaging.getResponseStatus().equals("SUCCESS")){
+                Path path = gson.fromJson(fileStaging.getData().toString(), Path.class);
+
+                if (path.getName().equals(file.getName())) {
+                    fileStaged.put(path.getName(), path.getPath());
+                }
+                log.log(Level.INFO, path.getName() + " UPLOAD SUCCESSFUL TO FSS");
+            }  else {
+                errorHandler(docFields, gson, log);
+            }
+
+
+
+
+
         }
         for (ExternalData data : externalData){
-            data.setFilename("u" + auth.getUserId() + "/" + data.getFilename());
+            data.setFilename("u" + auth.getUserId() + fileStaged.get(data.getFilename()));
         }
 
 
@@ -310,6 +369,14 @@ public class Rest {
 
 
     }
+
+    public static void errorHandler(Error error, Gson gson, Logger log){
+        Errors errors = gson.fromJson(error.getErrors()[0].toString(), Errors.class);
+
+        log.log(Level.INFO, errors.getType() + ": " + errors.getMessage());
+        System.exit(1);
+    }
+
 
     private static List<String[]> toStringArray(List<ExternalData> externalData, List<String> headers, Map<String, String> headerData) {
         List<String[]> records = new ArrayList<String[]>();
